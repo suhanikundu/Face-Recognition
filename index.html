@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emotion-Based Content Recommendation</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            font-family: 'Pacifico', cursive;
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #007BFF;
+            color: #FFFFFF;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+        }
+
+        section {
+            margin-top: 20px;
+        }
+
+        button {
+            background-color: #0056b3;
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            font-size: 16px;
+            margin: 10px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #004494;
+        }
+
+        .icon-button {
+            background-color: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 24px;
+            color: #FFFFFF;
+            margin-top: 10px;
+        }
+
+        .icon-button:hover {
+            color: #004494;
+        }
+
+        a {
+            color: #FFFFFF;
+            text-decoration: underline;
+        }
+        
+        #error-message {
+            color: #FF6347;
+        }
+    </style>
+    <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@latest/dist/face-api.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <section id="selectionScreen">
+            <h1>Choose Your Content</h1>
+            <button onclick="chooseContent('movie')">Movies</button>
+            <button onclick="chooseContent('music')">Music</button>
+            <button onclick="chooseContent('audiobook')">Audiobooks</button>
+        </section>
+
+        <section id="cameraSection" style="display: none;">
+            <h2>Analyzing Your Emotion...</h2>
+            <video id="video" autoplay></video>
+            <p id="error-message"></p>
+            <button onclick="stopEmotionCapture()" class="icon-button">
+                <i class="fas fa-camera"></i>
+            </button>
+        </section>
+
+        <section id="recommendationSection" style="display: none;">
+            <h2>Your Recommended Content</h2>
+            <div id="recommendations"></div>
+            <button onclick="resetApp()">Choose Again</button>
+        </section>
+    </div>
+
+    <script>
+        let selectedContent = '';
+        let video = document.getElementById('video');
+        let errorMessage = document.getElementById('error-message');
+
+        function chooseContent(content) {
+            selectedContent = content;
+            document.getElementById('selectionScreen').style.display = 'none';
+            document.getElementById('cameraSection').style.display = 'block';
+            startCamera();
+        }
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                errorMessage.textContent = "";
+                video.onloadedmetadata = () => video.play();
+                
+                // Load face-api models and start emotion detection
+                await Promise.all([
+                    realtimedetection.py.nets.tinyFaceDetector.loadFromUri('/C:\Users\ASUS\OneDrive\Desktop\Face Recognition'), 
+                    realtimedetection.py.nets.faceExpressionNet.loadFromUri('/C:\Users\ASUS\OneDrive\Desktop\Face Recognition')
+                ]);
+                detectEmotion();
+            } catch (err) {
+                console.error("Error accessing camera:", err);
+                errorMessage.textContent = "Could not access the camera. Please check permissions and try again.";
+            }
+        }
+
+        async function detectEmotion() {
+            const detections = await realtimedetection.py.detectAllFaces(video, new realtimedetection.py.TinyFaceDetectorOptions())
+                .withFaceExpressions();
+
+            if (detections.length > 0) {
+                const expressions = detections[0].expressions;
+                const detectedEmotion = Object.keys(expressions).reduce((a, b) => expressions[a] > expressions[b] ? a : b);
+                generateRecommendations(detectedEmotion);
+            } else {
+                setTimeout(detectEmotion, 500);  // Retry if no faces are detected
+            }
+        }
+
+        function generateRecommendations(emotion) {
+            document.getElementById('cameraSection').style.display = 'none';
+            document.getElementById('recommendationSection').style.display = 'block';
+
+            let recommendations = document.getElementById('recommendations');
+            recommendations.innerHTML = <p>Recommended ${selectedContent} for ${emotion} mood:</p>;
+
+            let recommendationList = getRecommendationsByEmotion(emotion, selectedContent);
+            recommendationList.forEach(item => {
+                let listItem = document.createElement('p');
+                listItem.innerHTML = <a href="${item.link}" target="_blank">${item.name}</a>;
+                recommendations.appendChild(listItem);
+            });
+        }
+
+        function getRecommendationsByEmotion(emotion, contentType) {
+            const recommendations = {
+                happy: {
+                    movie: [
+                        { name: "The Secret Life of Walter Mitty", link: "https://www.imdb.com/title/tt0359950/" },
+                        { name: "Amélie", link: "https://www.imdb.com/title/tt0211915/" }
+                    ],
+                    music: [
+                        { name: "Happy by Pharrell Williams", link: "https://open.spotify.com/track/60nZcImufyMA1MKQY3dcCH" },
+                        { name: "Walking on Sunshine by Katrina and the Waves", link: "https://open.spotify.com/track/2ROSTJdBjcH61ZAUumln0q" }
+                    ],
+                    audiobook: [
+                        { name: "The Power of Positive Thinking", link: "https://www.audible.com/pd/The-Power-of-Positive-Thinking-Audiobook/B00546SWB6" },
+                        { name: "The Happiness Advantage", link: "https://www.audible.com/pd/The-Happiness-Advantage-Audiobook/B004P7RBJY" }
+                    ]
+                },
+                sad: {
+                    movie: [
+                        { name: "The Pursuit of Happyness", link: "https://www.imdb.com/title/tt0454921/" },
+                        { name: "Inside Out", link: "https://www.imdb.com/title/tt2096673/" }
+                    ],
+                    music: [
+                        { name: "Fix You by Coldplay", link: "https://open.spotify.com/track/6KuQTIu1KoTTkLXKrwlLPV" },
+                        { name: "Someone Like You by Adele", link: "https://open.spotify.com/track/4zPw5KYj2tUi1xABRKTzNc" }
+                    ],
+                    audiobook: [
+                        { name: "Reasons to Stay Alive", link: "https://www.audible.com/pd/Reasons-to-Stay-Alive-Audiobook/B016R6B2VA" },
+                        { name: "Tuesdays with Morrie", link: "https://www.audible.com/pd/Tuesdays-with-Morrie-Audiobook/B002V8DHC4" }
+                    ]
+                },
+                angry: {
+                    movie: [
+                        { name: "Fury", link: "https://www.imdb.com/title/tt2713180/" },
+                        { name: "The Pursuit of Happyness", link: "https://www.imdb.com/title/tt0454921/" }
+                    ],
+                    music: [
+                        { name: "Break Stuff by Limp Bizkit", link: "https://open.spotify.com/track/4J1u5s5RY6DD6dYldfqV5U" },
+                        { name: "Killing in the Name by Rage Against the Machine", link: "https://open.spotify.com/track/2f7Nk0i1CjYwBPS1Q1k7v1" }
+                    ],
+                    audiobook: [
+                        { name: "Anger Management for Dummies", link: "https://www.audible.com/pd/Anger-Management-For-Dummies-Audiobook/B00EIXQNUK" },
+                        { name: "The Dance of Anger", link: "https://www.audible.com/pd/The-Dance-of-Anger-Audiobook/B002V1P46E" }
+                    ]
+                },
+                sad: {
+                    movie: [
+                        { name: "The Pursuit of Happyness", link: "https://www.imdb.com/title/tt0454921/" },
+                        { name: "Inside Out", link: "https://www.imdb.com/title/tt2096673/" }
+                    ],
+                    music: [
+                        { name: "Fix You by Coldplay", link: "https://open.spotify.com/track/6KuQTIu1KoTTkLXKrwlLPV" },
+                        { name: "Someone Like You by Adele", link: "https://open.spotify.com/track/4zPw5KYj2tUi1xABRKTzNc" }
+                    ],
+                    audiobook: [
+                        { name: "Reasons to Stay Alive", link: "https://www.audible.com/pd/Reasons-to-Stay-Alive-Audiobook/B016R6B2VA" },
+                        { name: "Tuesdays with Morrie", link: "https://www.audible.com/pd/Tuesdays-with-Morrie-Audiobook/B002V8DHC4" }
+                    ]
+                },
+                disgust: {
+                    movie: [
+                        { name: "The Shape of Water", link: "https://www.imdb.com/title/tt5580390/" },
+                        { name: "The Lobster", link: "https://www.imdb.com/title/tt3464902/" }
+                    ],
+                    music: [
+                        { name: "Bad Romance by Lady Gaga", link: "https://open.spotify.com/track/0F5F23Dbj8ILgU6BueVEIq" },
+                        { name: "Smells Like Teen Spirit by Nirvana", link: "https://open.spotify.com/track/6n6JoXnct3vEon6JdMSjtY" }
+                    ],
+                    audiobook: [
+                        { name: "The Art of Disgust", link: "https://www.audible.com/pd/The-Art-of-Disgust-Audiobook/B01N6T0Q7N" },
+                        { name: "The Poisonwood Bible", link: "https://www.audible.com/pd/The-Poisonwood-Bible-Audiobook/B002UZMK4G" }
+                    ]
+                },
+                fear: {
+                    movie: [
+                        { name: "A Quiet Place", link: "https://www.imdb.com/title/tt6644200/" },
+                        { name: "Get Out", link: "https://www.imdb.com/title/tt5052448/" }
+                    ],
+                    music: [
+                        { name: "Somebody's Watching Me by Rockwell", link: "https://open.spotify.com/track/1PL6grR0Tk8gZmGgUB3SKc" },
+                        { name: "Thriller by Michael Jackson", link: "https://open.spotify.com/track/0p6B6Q5oV9NdEjl1Ok61A0" }
+                    ],
+                    audiobook: [
+                        { name: "The Shining", link: "https://www.audible.com/pd/The-Shining-Audiobook/B0036G22V4" },
+                        { name: "Bird Box", link: "https://www.audible.com/pd/Bird-Box-Audiobook/B07L6Q2THK" }
+                    ]
+                },
+                neutral: {
+                    movie: [
+                        { name: "The Imitation Game", link: "https://www.imdb.com/title/tt2084970/" },
+                        { name: "The Social Network", link: "https://www.imdb.com/title/tt1285016/" }
+                    ],
+                    music: [
+                        { name: "Weightless by Marconi Union", link: "https://open.spotify.com/track/2Xg5sI3eowPZxgGZbJ8Vfn" },
+                        { name: "River Flows in You by Yiruma", link: "https://open.spotify.com/track/0K8dmGhKQ0TNEUp4QIC6c2" }
+                    ],
+                    audiobook: [
+                        { name: "Sapiens: A Brief History of Humankind", link: "https://www.audible.com/pd/Sapiens-Audiobook/B0142G39SA" },
+                        { name: "Becoming by Michelle Obama", link: "https://www.audible.com/pd/Becoming-Audiobook/B07P11FD9C" }
+                    ]
+                },
+                surprise: {
+                    movie: [
+                        { name: "The Sixth Sense", link: "https://www.imdb.com/title/tt0134119/" },
+                        { name: "Fight Club", link: "https://www.imdb.com/title/tt0137523/" }
+                    ],
+                    music: [
+                        { name: "Uptown Funk by Mark Ronson", link: "https://open.spotify.com/track/0j3f4FJ3D7K9R7kE36SBeA" },
+                        { name: "Surprise Surprise by Billy Joel", link: "https://open.spotify.com/track/4T8R4LZuPVFRCnXyAZzGNL" }
+                    ],
+                    audiobook: [
+                        { name: "The Girl on the Train", link: "https://www.audible.com/pd/The-Girl-on-the-Train-Audiobook/B00VGHM03G" },
+                        { name: "Gone Girl", link: "https://www.audible.com/pd/Gone-Girl-Audiobook/B0076N3K32" }
+                    ]
+                }
+            };
+            
+            return recommendations[emotion][contentType] || [];
+        }
+
+        function stopEmotionCapture() {
+            const stream = video.srcObject;
+            const tracks = stream.getTracks();
+            tracks.forEach(track => track.stop());
+            video.srcObject = null;
+            document.getElementById('cameraSection').style.display = 'none';
+            resetApp();
+        }
+
+        function resetApp() {
+            document.getElementById('selectionScreen').style.display = 'block';
+            document.getElementById('recommendationSection').style.display = 'none';
+            selectedContent = '';
+        }
+    </script>
+</body>
+</html>
